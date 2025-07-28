@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Saurabh</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      background-color: #0f2027; 
+    }
+    #constellation-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: -1;
+    }
+    .header {
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 30px 40px;
+      border-radius: 20px;
+      font-size: 2.5em;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      animation: fadeIn 1.5s ease forwards;
+      opacity: 0;
+      width: 80%;
+      max-width: 700px;
+      transform-style: preserve-3d;
+      transform: perspective(1000px);
+      transition: transform 0.1s linear;
+    }
+    .info-bar {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.4em;
+      font-weight: 300;
+      letter-spacing: 2px;
+      opacity: 0.9;
+    }
+    #weather-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #weather-icon {
+      font-size: 1.6em;
+    }
+    .shoutbox-container {
+      margin-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      padding-top: 15px;
+      font-size: 0.3em;
+      text-align: left;
+    }
+    #shoutbox-messages {
+      height: 100px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      padding-right: 10px;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    .shout-message {
+      margin-bottom: 8px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    .shout-message strong { color: #a1c4fd; }
+    .shoutbox-inputs { display: flex; gap: 10px; }
+    .shoutbox-inputs input {
+      flex-grow: 1;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 8px;
+      border-radius: 5px;
+      font-size: 1em;
+    }
+    .shoutbox-inputs button {
+      background: #a1c4fd;
+      color: #0f2027;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px) perspective(1000px); }
+      to { opacity: 1; transform: translateY(0) perspective(1000px); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="constellation-canvas"></canvas>
+
+  <div class="header">
+    Saurabh Kumar
+    <div class="info-bar">
+      <div id="clock-age-container">
+        <span id="time-display"></span> | <span id="age-display"></span>
+      </div>
+      <div id="weather-container">
+        <span id="weather-icon"></span>
+        <span id="weather-temp"></span>
+      </div>
+    </div>
+    <div class="shoutbox-container">
+      <div id="shoutbox-messages"></div>
+      <div class="shoutbox-inputs">
+        <input type="text" id="shout-name" placeholder="Your Name" value="Guest">
+        <input type="text" id="shout-text" placeholder="Type a message...">
+        <button id="shout-button">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+  <script>
+    // --- ⚠️ PASTE YOUR SECURE KEYS AND CONFIG HERE ⚠️ ---
+    const firebaseConfig = {
+       apiKey: "AIzaSyCLwwZJjfHKKtYGO7EChOCbDPwYdjXImZI",
+
+  authDomain: "database-c40f5.firebaseapp.com",
+
+  projectId: "database-c40f5",
+
+  storageBucket: "database-c40f5.firebasestorage.app",
+
+  messagingSenderId: "972819028541",
+
+  appId: "1:972819028541:web:b4860e9874193b114ea854",
+
+  measurementId: "G-86EBDYB53E"
+
+};
+
+    const openWeatherApiKey = "YOUR_OPENWEATHERMAP_API_KEY"; // Replace with your new key
+
+    // --- Initialize Firebase ---
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // --- Element References ---
+    const header = document.querySelector('.header');
+    const timeElement = document.getElementById('time-display');
+    const ageElement = document.getElementById('age-display');
+    const weatherIconEl = document.getElementById('weather-icon');
+    const weatherTempEl = document.getElementById('weather-temp');
+    const messagesContainer = document.getElementById('shoutbox-messages');
+    const nameInput = document.getElementById('shout-name');
+    const textInput = document.getElementById('shout-text');
+    const sendButton = document.getElementById('shout-button');
+
+    // --- Core Functions (Clock, Age, Weather) ---
+    function updateClock() {
+        const now = new Date();
+        timeElement.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    }
+    function calculateAndDisplayAge() {
+        const birthDate = new Date('2003-01-09');
+        const today = new Date();
+        let y=today.getFullYear()-birthDate.getFullYear(), m=today.getMonth()-birthDate.getMonth(), d=today.getDate()-birthDate.getDate();
+        if (d<0){ m--; d+=new Date(today.getFullYear(),today.getMonth(),0).getDate(); }
+        if (m<0){ y--; m+=12; }
+        ageElement.textContent = `${y}Y ${m}M ${d}D`;
+    }
+    async function getWeather() {
+        const lat = 25.44, lon = 75.64; // Bundi, Rajasthan
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openWeatherApiKey}&units=metric`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Weather data unavailable');
+            const data = await res.json();
+            weatherTempEl.textContent = `${Math.round(data.main.temp)}°C`;
+            const condition = data.weather[0].main;
+            const icons = {'Clear':'☀️','Clouds':'☁️','Rain':'🌧️','Drizzle':'🌦️','Thunderstorm':'⛈️','Snow':'❄️'};
+            weatherIconEl.textContent = icons[condition] || '🌫️';
+        } catch (error) {
+            console.error("Weather Error:", error);
+            weatherTempEl.textContent = 'N/A';
+        }
+    }
+
+    // --- Shoutbox Functions ---
+    function sendMessage() {
+        const name = nameInput.value.trim() || 'Guest';
+        const text = textInput.value.trim();
+        if (text === '') return;
+        db.collection('shouts').add({ name, text, timestamp: firebase.firestore.FieldValue.serverTimestamp() })
+          .then(() => { textInput.value = ''; })
+          .catch(e => console.error("Error sending message: ", e));
+    }
+    db.collection('shouts').orderBy('timestamp', 'desc').limit(20).onSnapshot(snapshot => {
+        messagesContainer.innerHTML = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const msgEl = document.createElement('div');
+            msgEl.classList.add('shout-message');
+            msgEl.innerHTML = `<strong>${data.name}:</strong> ${data.text}`;
+            messagesContainer.appendChild(msgEl);
+        });
+    });
+    sendButton.addEventListener('click', sendMessage);
+    textInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+    
+    // --- Interactive Effects ---
+    header.addEventListener('mousemove', e => {
+      const { left, top, width, height } = header.getBoundingClientRect();
+      const x = e.clientX - left - width/2, y = e.clientY - top - height/2;
+      header.style.transform = `perspective(1000px) rotateX(${(y/(height/2))*-10}deg) rotateY(${(x/(width/2))*10}deg)`;
+    });
+    header.addEventListener('mouseleave', () => { header.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)'; });
+
+    const canvas = document.getElementById('constellation-canvas'), ctx = canvas.getContext('2d');
+    let particles;
+    function setupCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+    function initParticles(){ particles=[]; let num=(canvas.height*canvas.width)/9e3; for(let i=0;i<num;i++){let s=Math.random()*2+1,x=Math.random()*(innerWidth-s*4)+s*2,y=Math.random()*(innerHeight-s*4)+s*2,dX=(Math.random()*.2)-.1,dY=(Math.random()*.2)-.1;particles.push({x,y,dX,dY,s});}}
+    function animateParticles(){ ctx.clearRect(0,0,innerWidth,innerHeight); particles.forEach(p=>{if(p.x>canvas.width||p.x<0)p.dX*=-1;if(p.y>canvas.height||p.y<0)p.dY*=-1;p.x+=p.dX;p.y+=p.dY;ctx.beginPath();ctx.arc(p.x,p.y,p.s,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fill();}); connectParticles(); requestAnimationFrame(animateParticles); }
+    function connectParticles(){let distThresh=(canvas.width/7)*(canvas.height/7);for(let a=0;a<particles.length;a++){for(let b=a;b<particles.length;b++){let dist=((particles[a].x-particles[b].x)**2)+((particles[a].y-particles[b].y)**2);if(dist<distThresh){let op=1-(dist/2e4);ctx.strokeStyle=`rgba(255,255,255,${op})`;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(particles[a].x,particles[a].y);ctx.lineTo(particles[b].x,particles[b].y);ctx.stroke();}}}}
+
+    // --- Page Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+      updateClock(); setInterval(updateClock, 1000);
+      calculateAndDisplayAge();
+      getWeather();
+      setupCanvas(); initParticles(); animateParticles();
+    });
+    window.addEventListener('resize', () => { setupCanvas(); initParticles(); });
+
+  </script>
+</body>
+</html>
